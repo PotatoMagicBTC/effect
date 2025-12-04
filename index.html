@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>魔法星尘：英语全能大师 (修复版)</title>
+    <style>
+        body { 
+            margin: 0; overflow: hidden; 
+            background: radial-gradient(circle at bottom center, #562b7c 0%, #2b1055 50%, #0f0524 100%);
+            font-family: 'Comic Sans MS', 'Chalkboard SE', 'Microsoft YaHei', sans-serif;
+            user-select: none;
+        }
+        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+        #video-container { display: none; }
+        
+        /* UI 层 */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;
+            pointer-events: none;
+        }
+        
+        /* 顶部目标提示 */
+        #target-bar {
+            position: absolute; top: 0; left: 0; width: 100%;
+            padding: 15px 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            text-align: center;
+            color: #fff; font-size: 24px; font-weight: bold;
+            border-bottom: 2px solid rgba(255,255,255,0.2);
+            display: none;
+        }
+        #current-target-text { color: #ffd700; font-size: 36px; margin-left: 10px; vertical-align: middle;}
+
+        /* 分数与进度 */
+        #score-board {
+            position: absolute; top: 90px; left: 20px;
+            font-size: 26px; color: #fff; text-shadow: 2px 2px 4px #000;
+        }
+        #score-val { color: #ffd700; font-size: 36px; font-weight: bold; }
+
+        #top-right-panel {
+            position: absolute; top: 90px; right: 20px;
+            display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+        }
+        #progress-board { font-size: 22px; color: #0ff; text-shadow: 1px 1px 2px #000; font-weight: bold; }
+        
+        .control-btn {
+            pointer-events: auto;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            color: white; font-size: 16px;
+            padding: 6px 16px; border-radius: 30px;
+            cursor: pointer; transition: 0.2s;
+            width: 130px; text-align: center; margin-bottom: 5px;
+            backdrop-filter: blur(5px);
+        }
+        #pause-btn { background: rgba(255, 255, 255, 0.2); }
+        #home-btn { background: rgba(255, 80, 80, 0.3); border-color: rgba(255, 100, 100, 0.6); }
+        /* 测试按钮 */
+        #debug-btn { background: rgba(255, 215, 0, 0.3); border-color: rgba(255, 215, 0, 0.8); color: #ffd700; font-weight: bold;}
+        
+        .control-btn:hover { transform: scale(1.05); filter: brightness(1.2); }
+
+        /* 菜单层 */
+        #menu-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none; 
+            flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 40;
+            backdrop-filter: blur(10px);
+        }
+        .menu-title { font-size: 50px; color: #ffd700; margin-bottom: 40px; text-shadow: 0 0 20px #f0f; font-weight: bold; }
+        .mode-btn {
+            pointer-events: auto;
+            background: linear-gradient(45deg, #4b2d7f, #7597de);
+            border: 2px solid #fff;
+            color: white; font-size: 28px; padding: 20px 40px; margin: 15px;
+            border-radius: 50px; cursor: pointer; width: 420px; text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        .mode-btn:hover { transform: scale(1.05); box-shadow: 0 0 20px #0ff; background: linear-gradient(45deg, #6a4c9c, #95b7fe); }
+        .mode-desc { display: block; font-size: 16px; color: #ddd; margin-top: 5px; font-weight: normal;}
+
+        /* 遮罩层 (教学/倒计时/胜利) */
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none; 
+            flex-direction: column;
+            justify-content: center; align-items: center;
+            color: white; z-index: 20;
+            backdrop-filter: blur(8px);
+        }
+        #overlay-title { font-size: 30px; color: #aaa; margin-bottom: 20px; letter-spacing: 2px;}
+        #overlay-content { font-size: 100px; font-weight: bold; color: #ffd700; text-shadow: 0 0 40px #f0f; text-align: center; margin-bottom: 20px;}
+        #overlay-sub { font-size: 30px; margin-top: 20px; color: #0ff; border: 2px dashed #0ff; padding: 10px 30px; border-radius: 50px; animation: pulse 1s infinite alternate; }
+        @keyframes pulse { from { transform: scale(1); opacity: 0.8; } to { transform: scale(1.05); opacity: 1; } }
+        #overlay-countdown { font-size: 150px; font-weight: bold; color: #fff; margin-top: 50px; display: none; }
+        
+        /* 胜利页面专属样式 */
+        .victory-title { font-size: 120px !important; color: #0f0 !important; text-shadow: 0 0 30px #fff, 0 0 60px #0f0 !important; animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .victory-sub { border: none !important; color: #fff !important; font-size: 40px !important; background: rgba(255,255,255,0.2); cursor: pointer; transition: 0.3s; }
+        .victory-sub:hover { background: rgba(255,255,255,0.4); transform: scale(1.1); }
+        @keyframes pop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+        /* 加载层 */
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; font-size: 24px; text-align: center;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            padding: 40px; border-radius: 20px; border: 2px solid rgba(255,255,255,0.5);
+            pointer-events: auto; cursor: pointer;
+            box-shadow: 0 0 30px rgba(186, 85, 211, 0.6);
+            z-index: 50;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+<div id="target-bar">
+    🎯 目标: <span id="current-target-text">...</span>
+</div>
+
+<div id="ui-layer">
+    <div id="score-board">✨ 得分: <span id="score-val">0</span></div>
+    
+    <div id="top-right-panel">
+        <div id="progress-board">🏆 进度: <span id="progress-text">0 / 0</span></div>
+        <button id="pause-btn" class="control-btn" onclick="togglePause()">⏸️ 暂停</button>
+        <button id="home-btn" class="control-btn" onclick="goHome()">🏠 主页</button>
+        <!-- 方便你预览的按钮 -->
+        <button id="debug-btn" class="control-btn" onclick="showVictory()">⚡ 测试通关</button>
+    </div>
+</div>
+
+<div id="menu-layer">
+    <div class="menu-title">🌟 英语单词大冒险 🌟</div>
+    <div class="mode-btn" onclick="selectMode(1)">
+        🎧 模式 1: 听音辨词
+        <span class="mode-desc">看中文 + 听英文 -> 选英文</span>
+    </div>
+    <div class="mode-btn" onclick="selectMode(2)">
+        📖 模式 2: 单词阅读
+        <span class="mode-desc">看中文 (无声) -> 选英文</span>
+    </div>
+    <div class="mode-btn" onclick="selectMode(3)">
+        🇨🇳 模式 3: 英汉互译
+        <span class="mode-desc">看英文 + 听英文 -> 选中文</span>
+    </div>
+</div>
+
+<div id="overlay">
+    <div id="overlay-title">卡片学习</div>
+    <div id="overlay-content">...</div>
+    <div id="overlay-sub">...</div>
+    <div id="overlay-countdown">3</div>
+</div>
+
+<div id="loading" onclick="initSystem()">
+    🚀 点击开启魔法引擎<br>
+    <span style="font-size:16px; opacity:0.8; display:block; margin-top:10px;">(需要麦克风/摄像头权限)</span>
+</div>
+
+<video id="input_video" autoplay playsinline></video>
+<canvas id="output_canvas"></canvas>
+
+<script>
+    // --- 1. 核心数据 ---
+    const rawVocabList = [
+        { cn: "马 🐎", en: "horse" },
+        { cn: "母鸡 🐔", en: "hen" },
+        { cn: "蜜蜂 🐝", en: "bee" },
+        { cn: "温暖的 ☀️", en: "warm" },
+        { cn: "舒适的 🛋️", en: "cozy" },
+        { cn: "圆圆的 ⭕", en: "round" },
+        { cn: "软软的 ☁️", en: "soft" },
+        { cn: "小小的 🐜", en: "small" },
+        { cn: "可爱的 🧸", en: "cute" }
+    ];
+
+    const REPEAT_COUNT = 2; 
+    const TOTAL_TASKS = rawVocabList.length * REPEAT_COUNT;
+    let vocabCounts = []; 
+    let currentMode = 1; 
+    let levelStartTime = 0;
+    
+    // 烟花定时器引用
+    let fireworkInterval = null;
+
+    // --- 2. DOM ---
+    const canvas = document.getElementById('output_canvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score-val');
+    const progressText = document.getElementById('progress-text');
+    const loadingEl = document.getElementById('loading');
+    const menuLayer = document.getElementById('menu-layer');
+    const overlay = document.getElementById('overlay');
+    const overlayContent = document.getElementById('overlay-content');
+    const overlaySub = document.getElementById('overlay-sub');
+    const overlayCountdown = document.getElementById('overlay-countdown');
+    const overlayTitle = document.getElementById('overlay-title');
+    const targetBar = document.getElementById('target-bar');
+    const currentTargetTextEl = document.getElementById('current-target-text');
+    const pauseBtn = document.getElementById('pause-btn');
+
+    let width, height;
+    let score = 0;
+    let isPaused = false;
+    let gameState = "IDLE"; 
+    let currentVocab = null;
+    let currentVocabIndex = -1;
+    let lastVocabIndex = -1;
+    let audioCtx = null;
+
+    // --- 3. 语音 ---
+    function speakWord(text) {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel(); 
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'en-US'; u.rate = 0.8; 
+            window.speechSynthesis.speak(u);
+        }
+    }
+
+    // --- 4. 音效 ---
+    function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    function playSound(type) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+        if (type === 'correct') {
+            osc.type = 'sine'; osc.frequency.setValueAtTime(523, now); osc.frequency.setValueAtTime(784, now + 0.1); 
+            gainNode.gain.setValueAtTime(0.3, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+            osc.start(now); osc.stop(now + 0.6);
+        } else if (type === 'wrong') {
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(150, now); osc.frequency.linearRampToValueAtTime(80, now + 0.3);
+            gainNode.gain.setValueAtTime(0.3, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.3);
+            osc.start(now); osc.stop(now + 0.3);
+        } else if (type === 'victory') {
+            // 胜利长音
+            osc.type = 'square'; 
+            osc.frequency.setValueAtTime(400, now); 
+            osc.frequency.linearRampToValueAtTime(800, now+0.2);
+            osc.frequency.linearRampToValueAtTime(1200, now+0.4);
+            gainNode.gain.setValueAtTime(0.2, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
+            osc.start(now); osc.stop(now + 1.2);
+        }
+    }
+
+    // --- 5. 流程控制 ---
+
+    function initSystem() {
+        loadingEl.style.display = 'none';
+        initAudio();
+        camera.start();
+        showMenu();
+    }
+
+    function showMenu() {
+        gameState = "MENU";
+        clearInterval(fireworkInterval); // 停止烟花
+        menuLayer.style.display = 'flex';
+        overlay.style.display = 'none';
+        targetBar.style.display = 'none';
+        bubbles = []; particles = []; floatTexts = [];
+    }
+
+    function goHome() {
+        isPaused = false;
+        window.speechSynthesis.cancel();
+        showMenu();
+    }
+
+    function selectMode(mode) {
+        currentMode = mode;
+        menuLayer.style.display = 'none';
+        vocabCounts = new Array(rawVocabList.length).fill(REPEAT_COUNT);
+        score = 0; scoreEl.innerText = score;
+        lastVocabIndex = -1;
+        nextLevel();
+    }
+
+    function nextLevel() {
+        let activeIndices = [];
+        let remainingTasks = 0;
+        for(let i=0; i<vocabCounts.length; i++) {
+            remainingTasks += vocabCounts[i];
+            if (vocabCounts[i] > 0) activeIndices.push(i);
+        }
+        
+        let completed = TOTAL_TASKS - remainingTasks;
+        progressText.innerText = `${completed} / ${TOTAL_TASKS}`;
+
+        if (remainingTasks <= 0) {
+            showVictory();
+            return;
+        }
+
+        let candidates = activeIndices;
+        if (activeIndices.length > 1 && lastVocabIndex !== -1) {
+            candidates = activeIndices.filter(idx => idx !== lastVocabIndex);
+        }
+        
+        const selectedIndex = candidates[Math.floor(Math.random() * candidates.length)];
+        currentVocabIndex = selectedIndex;
+        lastVocabIndex = selectedIndex;
+        currentVocab = rawVocabList[selectedIndex];
+
+        bubbles = [];
+        startTeaching();
+    }
+
+    function startTeaching() {
+        gameState = "TEACHING";
+        isPaused = true;
+        
+        overlay.style.display = 'flex';
+        overlayTitle.style.display = 'block';
+        overlaySub.style.display = 'block';
+        overlayCountdown.style.display = 'none';
+        targetBar.style.display = 'none';
+        
+        // 重置样式避免残留
+        overlayContent.className = '';
+        overlaySub.className = '';
+        
+        if (currentMode === 1) {
+            overlayTitle.innerText = "Mode 1: 听音辨词";
+            overlayContent.innerText = currentVocab.cn;
+            overlaySub.innerText = "👂 竖起耳朵听英文...";
+            setTimeout(() => speakWord(currentVocab.en), 200);
+            setTimeout(() => speakWord(currentVocab.en), 2200);
+            setTimeout(startCountdown, 4000);
+        } else if (currentMode === 2) {
+            overlayTitle.innerText = "Mode 2: 单词阅读";
+            overlayContent.innerText = currentVocab.cn;
+            overlaySub.innerText = "🤫 仔细看，不要出声...";
+            setTimeout(startCountdown, 3000);
+        } else if (currentMode === 3) {
+            overlayTitle.innerText = "Mode 3: 英汉互译";
+            overlayContent.innerText = currentVocab.en;
+            overlaySub.innerText = "🧠 它的中文意思是？";
+            setTimeout(() => speakWord(currentVocab.en), 200);
+            setTimeout(() => speakWord(currentVocab.en), 2200);
+            setTimeout(startCountdown, 4000);
+        }
+    }
+
+    function startCountdown() {
+        gameState = "COUNTDOWN";
+        overlayTitle.style.display = 'none';
+        overlayContent.style.display = 'none';
+        overlaySub.style.display = 'none';
+        overlayCountdown.style.display = 'block';
+        
+        let count = 3;
+        overlayCountdown.innerText = count;
+        
+        const timer = setInterval(() => {
+            count--;
+            if (count > 0) {
+                overlayCountdown.innerText = count;
+            } else {
+                clearInterval(timer);
+                startGameplay();
+            }
+        }, 1000);
+    }
+
+    function startGameplay() {
+        gameState = "PLAYING";
+        isPaused = false;
+        overlay.style.display = 'none';
+        targetBar.style.display = 'block';
+        levelStartTime = Date.now();
+        
+        if (currentMode === 1) currentTargetTextEl.innerText = `[${currentVocab.cn}] 对应的英文是?`;
+        else if (currentMode === 2) currentTargetTextEl.innerText = `[${currentVocab.cn}] 对应的英文是?`;
+        else if (currentMode === 3) currentTargetTextEl.innerText = `[${currentVocab.en}] 对应的中文是?`;
+    }
+
+    // --- 核心修复：通关展示 ---
+    function showVictory() {
+        gameState = "VICTORY";
+        isPaused = false; // 关键：不暂停，让粒子继续渲染
+        
+        bubbles = []; // 清空气泡
+        
+        overlay.style.display = 'flex';
+        overlayTitle.innerText = "🎉 挑战成功！ 🎉";
+        overlayTitle.style.display = 'block';
+        
+        overlayContent.innerText = "YOU WIN!";
+        overlayContent.style.display = 'block';
+        overlayContent.className = 'victory-title'; // 应用大号霓虹样式
+        
+        overlaySub.innerText = "🏠 返回主菜单";
+        overlaySub.style.display = 'block';
+        overlaySub.className = 'victory-sub';
+        overlaySub.onclick = () => goHome();
+        
+        overlayCountdown.style.display = 'none';
+        targetBar.style.display = 'none';
+        
+        // 启动彩色烟花循环
+        clearInterval(fireworkInterval);
+        fireworkInterval = setInterval(() => {
+             if (gameState !== "VICTORY") {
+                 clearInterval(fireworkInterval);
+                 return;
+             }
+             playSound('victory');
+             // 每次发射 8-10 个彩色粒子
+             for(let i=0; i<10; i++) {
+                 // 在屏幕中间随机位置爆炸
+                 const px = width/2 + (Math.random()-0.5)*800;
+                 const py = height/2 + (Math.random()-0.5)*500;
+                 particles.push(new Particle(px, py, 'victory'));
+             }
+        }, 500);
+    }
+
+    function togglePause() {
+        if (gameState !== "PLAYING") return;
+        isPaused = !isPaused;
+        pauseBtn.innerText = isPaused ? "▶️ 继续" : "⏸️ 暂停";
+    }
+
+    // --- 6. 视觉对象 ---
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+        initStars();
+    }
+    window.addEventListener('resize', resize);
+
+    let bgStars = [];
+    class BgStar {
+        constructor() {
+            this.x = Math.random() * width; this.y = Math.random() * height;
+            this.size = Math.random() * 2 + 0.5; this.alpha = Math.random(); this.blinkDir = 0.02;
+        }
+        update() { this.alpha += this.blinkDir; if (this.alpha > 1 || this.alpha < 0.2) this.blinkDir *= -1; }
+        draw() { ctx.fillStyle = `rgba(255,255,255,${this.alpha})`; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill(); }
+    }
+    function initStars() { bgStars = []; for(let i=0; i<80; i++) bgStars.push(new BgStar()); }
+
+    class Bubble {
+        constructor(text, isCorrect) {
+            this.r = 65; this.y = height + 80;
+            this.text = text; this.isCorrect = isCorrect;
+            this.speed = (Math.random() * 1.5 + 1) * 0.5;
+            let safeX = -1, attempts = 0;
+            while (safeX < 0 && attempts < 10) {
+                let testX = Math.random() * (width - 150) + 75;
+                if (!bubbles.some(b => Math.abs(b.x - testX) < 140)) safeX = testX;
+                attempts++;
+            }
+            this.x = safeX > 0 ? safeX : Math.random() * (width - 150) + 75;
+            this.hue = Math.random() * 360;
+            this.color = `hsla(${this.hue}, 80%, 70%, 0.3)`;
+            this.stroke = `hsla(${this.hue}, 100%, 85%, 1)`;
+            this.wobble = Math.random() * Math.PI * 2;
+        }
+        update() { this.y -= this.speed; this.x += Math.sin(this.wobble) * 0.5; this.wobble += 0.02; }
+        draw() {
+            ctx.beginPath(); ctx.fillStyle = this.color; ctx.strokeStyle = this.stroke; ctx.lineWidth = 4;
+            ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            ctx.font = (currentMode === 3) ? "bold 50px 'Microsoft YaHei'" : "bold 36px Comic Sans MS";
+            ctx.fillText(this.text, this.x, this.y);
+        }
+    }
+
+    class Particle {
+        constructor(x, y, type) {
+            this.x = x; this.y = y;
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 6 + 2;
+            this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed;
+            this.life = 1.0; this.type = type; 
+            
+            if (type === 'gold') {
+                this.color = `hsl(${45 + Math.random()*15}, 100%, 60%)`; 
+                this.gravity = 0.15; this.decay = 0.015; this.size = Math.random() * 7 + 4;
+            } else if (type === 'victory') {
+                // 彩色烟花
+                this.color = `hsl(${Math.random() * 360}, 100%, 60%)`;
+                this.gravity = 0.1; this.decay = 0.01; this.size = Math.random() * 8 + 5;
+            } else {
+                this.color = `rgba(50, 50, 50, 1)`; 
+                this.gravity = -0.05; this.decay = 0.04; this.size = Math.random() * 5 + 2;
+            }
+        }
+        update() {
+            this.vx *= 0.95; this.vy *= 0.95; this.vy += this.gravity;
+            this.x += this.vx; this.y += this.vy; this.life -= this.decay;
+        }
+        draw() {
+            ctx.globalAlpha = this.life; ctx.fillStyle = this.color;
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1.0;
+        }
+    }
+
+    class FloatText {
+        constructor(x, y, text, color) { this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; }
+        update() { this.y -= 1; this.life -= 0.02; }
+        draw() { ctx.globalAlpha = this.life; ctx.fillStyle = this.color; ctx.font = "bold 40px Arial"; ctx.fillText(this.text, this.x, this.y); ctx.globalAlpha = 1.0; }
+    }
+    class Trail {
+        constructor(x, y) { this.x = x; this.y = y; this.life = 1.0; }
+        update() { this.life -= 0.1; }
+        draw() { ctx.fillStyle = `rgba(255,255,255,${this.life})`; ctx.beginPath(); ctx.arc(this.x, this.y, 10, 0, Math.PI*2); ctx.fill(); }
+    }
+
+    // --- 7. 主循环 ---
+    let handX = -100, handY = -100;
+    let bubbles = [], particles = [], trails = [], floatTexts = [];
+    let frameCount = 0;
+
+    resize();
+    initStars();
+
+    function gameLoop() {
+        ctx.clearRect(0, 0, width, height);
+        bgStars.forEach(s => { s.update(); s.draw(); });
+
+        // 无论是 PLAYING 还是 VICTORY，都要更新粒子特效，否则烟花会静止
+        [particles, trails, floatTexts].forEach(arr => {
+            for(let i=arr.length-1; i>=0; i--) {
+                arr[i].update(); arr[i].draw();
+                if(arr[i].life <= 0) arr.splice(i, 1);
+            }
+        });
+
+        if (gameState === "PLAYING" && !isPaused) {
+            frameCount++;
+            if (frameCount % 180 === 0 && bubbles.length < 3) {
+                const timeElapsed = Date.now() - levelStartTime;
+                let forceWrong = (timeElapsed < 3000); 
+                const hasCorrectOnScreen = bubbles.some(b => b.isCorrect);
+                let willSpawnCorrect = (!forceWrong && !hasCorrectOnScreen) && (Math.random() < 0.6);
+
+                let bubbleText = "", isCorrect = false;
+                if (willSpawnCorrect) {
+                    bubbleText = (currentMode === 3) ? currentVocab.cn : currentVocab.en;
+                    isCorrect = true;
+                } else {
+                    let randomWrong;
+                    do { randomWrong = rawVocabList[Math.floor(Math.random() * rawVocabList.length)]; } while (randomWrong.en === currentVocab.en);
+                    bubbleText = (currentMode === 3) ? randomWrong.cn : randomWrong.en;
+                    isCorrect = false;
+                }
+                if (!bubbles.some(b => b.text === bubbleText)) bubbles.push(new Bubble(bubbleText, isCorrect));
+            }
+
+            for (let i = bubbles.length - 1; i >= 0; i--) {
+                let b = bubbles[i];
+                b.update(); b.draw();
+                const dx = handX - b.x, dy = handY - b.y;
+                if (Math.sqrt(dx*dx + dy*dy) < b.r + 15) {
+                    if (b.isCorrect) {
+                        playSound('correct');
+                        score += 10; scoreEl.innerText = score;
+                        if(vocabCounts[currentVocabIndex] > 0) vocabCounts[currentVocabIndex]--;
+                        for(let k=0; k<40; k++) particles.push(new Particle(b.x, b.y, 'gold'));
+                        floatTexts.push(new FloatText(b.x, b.y, "Bingo! +10", "#ffd700"));
+                        bubbles.splice(i, 1);
+                        gameState = "WAITING";
+                        setTimeout(nextLevel, 1500);
+                    } else {
+                        playSound('wrong');
+                        for(let k=0; k<15; k++) particles.push(new Particle(b.x, b.y, 'dark'));
+                        floatTexts.push(new FloatText(b.x, b.y, "Try Again", "#aaa"));
+                        bubbles.splice(i, 1);
+                    }
+                } else if (b.y < -100) bubbles.splice(i, 1);
+            }
+        }
+
+        if (handX > 0 && gameState !== "MENU") {
+            trails.push(new Trail(handX, handY));
+            ctx.beginPath(); ctx.fillStyle = "#fff";
+            ctx.shadowBlur = 15; ctx.shadowColor = "#0ff";
+            ctx.arc(handX, handY, 12, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+        }
+
+        requestAnimationFrame(gameLoop);
+    }
+    gameLoop();
+
+    const videoElement = document.getElementById('input_video');
+    const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    hands.onResults(results => {
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            const p = results.multiHandLandmarks[0][8];
+            const tx = (1 - p.x) * width, ty = p.y * height;
+            if (handX < 0) { handX = tx; handY = ty; }
+            else { handX += (tx - handX) * 0.3; handY += (ty - handY) * 0.3; }
+        }
+    });
+    const camera = new Camera(videoElement, { onFrame: async () => await hands.send({image: videoElement}), width: 640, height: 480 });
+    window.addEventListener('mousemove', e => { if (!isPaused) { handX = e.clientX; handY = e.clientY; } });
+</script>
+</body>
+</html>
